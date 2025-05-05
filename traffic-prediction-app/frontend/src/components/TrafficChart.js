@@ -1,11 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import * as tt from '@tomtom-international/web-sdk-services';
+import * as ttmaps from '@tomtom-international/web-sdk-maps';
 import { TOMTOM_API_KEY, WEATHER_API_KEY } from '../config';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend
 } from "recharts";
+
 
 // Add this formatter function at the top of your component
 const formatXAxis = (hour) => {
@@ -14,28 +16,84 @@ const formatXAxis = (hour) => {
   return `${hour12}${ampm}`;
 };
 
+// Add this array at the top of your file, after the imports
+const INDIAN_STATES = [
+  'Andhra Pradesh',
+  'Arunachal Pradesh',
+  'Assam',
+  'Bihar',
+  'Chhattisgarh',
+  'Goa',
+  'Gujarat',
+  'Haryana',
+  'Himachal Pradesh',
+  'Jharkhand',
+  'Karnataka',
+  'Kerala',
+  'Madhya Pradesh',
+  'Maharashtra',
+  'Manipur',
+  'Meghalaya',
+  'Mizoram',
+  'Nagaland',
+  'Odisha',
+  'Punjab',
+  'Rajasthan',
+  'Sikkim',
+  'Tamil Nadu',
+  'Telangana',
+  'Tripura',
+  'Uttar Pradesh',
+  'Uttarakhand',
+  'West Bengal'
+];
+
 function TrafficChart() {
   const [selectedSource, setSelectedSource] = useState("");
   const [selectedDestination, setSelectedDestination] = useState("");
+  const [selectedState, setSelectedState] = useState("");
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [progress, setProgress] = useState(0); // Add progress state
-  const getTrafficData = async (source, destination) => {
+  const [progress, setProgress] = useState(0);
+  const mapElement = useRef(null);
+
+  useEffect(() => {
+    let map = null;
+    
+    if (mapElement.current) {
+      map = ttmaps.map({
+        key: TOMTOM_API_KEY,
+        container: mapElement.current,
+        center: [77.5946, 12.9716], // Default center (Bangalore)
+        zoom: 12
+      });
+    }
+
+    return () => {
+      if (map) {
+        map.remove();
+      }
+    };
+  }, []);
+
+  const getTrafficData = async (source, destination, state) => {
     try {
       setLoading(true);
       setError("");
       setProgress(0);
-      setChartData([]); // Clear existing data
+      setChartData([]);
 
-      // Convert locations to coordinates using TomTom Search API
+      const sourceWithState = `${source}, ${state}, India`;
+      const destWithState = `${destination}, ${state}, India`;
+
       const sourceRes = await tt.services.fuzzySearch({
         key: TOMTOM_API_KEY,
-        query: source
+        query: sourceWithState
       });
       const destRes = await tt.services.fuzzySearch({
         key: TOMTOM_API_KEY,
-        query: destination
+        query: destWithState
       });
 
       if (!sourceRes.results.length || !destRes.results.length) {
@@ -63,18 +121,17 @@ function TrafficChart() {
         temperature: 'N/A',
         traffic_level: 'Fetching...'
       }));
-      // Set initial state
+
       setChartData(initialHourlyData);
-      console.log("Initial chart data set:", initialHourlyData);
-      // Process each hour with increased delay
+
+      // Process each hour
       const currentDate = new Date();
       for (let i = 0; i < 24; i++) {
         try {
-          // Format date for TomTom API
           const departAt = new Date(currentDate);
           departAt.setHours(i, 0, 0, 0);
           const formattedDate = departAt.toISOString();
-          // Make API request for this hour
+
           const routeRes = await axios.get(
             `https://api.tomtom.com/routing/1/calculateRoute/${sourceLoc.lat},${sourceLoc.lng}:${destLoc.lat},${destLoc.lng}/json`,
             {
@@ -88,14 +145,11 @@ function TrafficChart() {
 
           const route = routeRes.data.routes[0];
           const summary = route.summary;
-          // console.log(`Route summary for hour ${i}:`, summary);
-          // console.log(route)
           
           const weatherHour = weatherRes.data.list.find(item => 
             new Date(item.dt * 1000).getHours() === i
           );
-          console.log('trafic length', summary.trafficLengthInMeters);
-          // Update chart data for this hour
+
           setChartData(prevData => {
             const newData = [...prevData];
             newData[i] = {
@@ -113,16 +167,13 @@ function TrafficChart() {
             return newData;
           });
 
-          // Update progress
           setProgress(Math.round(((i + 1) / 24) * 100));
 
-          // Add increased delay between requests
           if (i < 23) {
-            await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
         } catch (err) {
           console.error(`Error fetching data for hour ${i}:`, err);
-          // Leave the placeholder data for failed requests
         }
       }
     } catch (error) {
@@ -140,13 +191,13 @@ function TrafficChart() {
     return 'High';
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e) => { // Update handleSubmit to include state
     e.preventDefault();
-    if (!selectedSource || !selectedDestination) {
-      setError("Please enter both source and destination locations");
+    if (!selectedSource || !selectedDestination || !selectedState) {
+      setError("Please select state and enter both source and destination locations");
       return;
     }
-    await getTrafficData(selectedSource, selectedDestination);
+    await getTrafficData(selectedSource, selectedDestination, selectedState);
   };
 
   return (
@@ -156,11 +207,22 @@ function TrafficChart() {
       </h2>
       
       <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-4 mb-8 justify-center items-center">
+        <select
+          value={selectedState}
+          onChange={(e) => setSelectedState(e.target.value)}
+          className="w-64 p-2 border border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+        >
+          <option value="">Select State</option>
+          {INDIAN_STATES.map(state => (
+            <option key={state} value={state}>{state}</option>
+          ))}
+        </select>
+
         <input
           type="text"
           value={selectedSource}
           onChange={(e) => setSelectedSource(e.target.value)}
-          placeholder="Enter source location (e.g., London)"
+          placeholder="Enter source location"
           className="w-64 p-2 border border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
         />
 
@@ -168,15 +230,15 @@ function TrafficChart() {
           type="text"
           value={selectedDestination}
           onChange={(e) => setSelectedDestination(e.target.value)}
-          placeholder="Enter destination (e.g., Manchester)"
+          placeholder="Enter destination"
           className="w-64 p-2 border border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
         />
 
         <button 
           type="submit"
-          disabled={loading}
+          disabled={loading || !selectedState}
           className={`px-6 py-2 text-white rounded-md transition-colors duration-200 ${
-            loading 
+            loading || !selectedState
               ? 'bg-gray-400 cursor-not-allowed' 
               : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2'
           }`}
@@ -206,35 +268,54 @@ function TrafficChart() {
       )}
 
       {chartData.length > 0 && !error && (
-        <div className="bg-white p-6 rounded-lg shadow-lg">
-          <h3 className="text-xl font-semibold text-gray-700 mb-4">
-            Hourly Travel Time Analysis
-          </h3>
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis 
-                dataKey="hour"
-                tickFormatter={formatXAxis}
-                label={{ value: 'Time of Day', position: 'bottom', className: 'text-sm' }}
-              />
-              <YAxis 
-                label={{ 
-                  value: 'Travel Time (minutes)', 
-                  angle: -90, 
-                  position: 'insideLeft',
-                  className: 'text-sm'
-                }}
-              />
-              <Tooltip content={CustomTooltip} />
-              <Legend />
-              <Bar 
-                dataKey="travel_time" 
-                fill="#6366f1" 
-                name="Travel Time"
-              />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="w-full flex justify-center mb-6">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-6xl">
+            <h3 className="text-xl font-semibold text-gray-700 mb-4 text-center">
+              Hourly Travel Time Analysis
+            </h3>
+            <ResponsiveContainer width="100%" height={500}>
+              <BarChart 
+                data={chartData}
+                margin={{ top: 20, right: 0, left:0, bottom: 40 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="hour"
+                  tickFormatter={formatXAxis}
+                  interval={0}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                  minTickGap={25}
+                  label={{ 
+                    value: 'Time of Day', 
+                    position: 'insideBottom',
+                    offset:20,
+                    className: 'text-sm'
+                  }}
+                />
+                <YAxis 
+                  label={{ 
+                    value: 'Travel Time (minutes)', 
+                    angle: -90, 
+                    position: 'insideLeft',
+                    offset: -10,
+                    className: 'text-sm'
+                  }}
+                />
+                <Tooltip content={CustomTooltip} />
+                <Legend 
+                  verticalAlign="top" 
+                  height={36}
+                />
+                <Bar 
+                  dataKey="travel_time" 
+                  name="Travel Time"
+                  fill="#6366f1"
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
     </div>
