@@ -18,6 +18,7 @@ import RecenterButton from './RecenterButton';
 // Import hooks
 import useLocationTracking from '../hooks/useLocationTracking';
 import useParkingSpots from '../hooks/useParkingSpots';
+import useEvStations from '../hooks/useEvStations';
 import useGoogleMapsServices from '../hooks/useGoogleMapsServices';
 
 // Define constant libraries outside component to avoid reload issues in LoadScript
@@ -97,6 +98,21 @@ const BestRoute = () => {
     getSuggestions,
     clearSuggestions
   } = useGoogleMapsServices();
+
+  // EV stations
+  const {
+    evStations,
+    showEvInfo,
+    loadingEvInfo,
+    selectedEvStation,
+    evRadius,
+    setShowEvInfo,
+    setSelectedEvStation,
+    setEvRadius,
+    findEvStations,
+    getEvIcon,
+    formatDistance: evFormatDistance
+  } = useEvStations(selectedDestination, mapRef);
 
   // Fetch weather info helper
   const getWeatherInfo = async (lat, lng) => {
@@ -360,6 +376,27 @@ const BestRoute = () => {
     }
   };
 
+  // EV stations handler
+  const handleFindEvStations = async () => {
+    if (!selectedDestination && directions.length === 0) {
+      setError("Please enter a destination or compute a route first");
+      return;
+    }
+
+    if (!isGoogleLoaded) {
+      setError("Google Maps is still loading. Please wait a moment and try again.");
+      return;
+    }
+
+    try {
+      const routeForSearch = selectedRoute || directions[0] || null;
+      await findEvStations(routeForSearch);
+    } catch (error) {
+      console.error('Error finding EV stations:', error);
+      setError("Failed to find EV charging stations. Please try again.");
+    }
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto bg-gray-50">
       <h2 className="text-3xl font-bold text-gray-800 mb-8 text-center">
@@ -379,8 +416,11 @@ const BestRoute = () => {
         setSelectedMode={setSelectedMode}
         parkingRadius={parkingRadius}
         setParkingRadius={setParkingRadius}
+        evRadius={evRadius}
+        setEvRadius={setEvRadius}
         loading={loading}
         loadingParkingInfo={loadingParkingInfo}
+        loadingEvInfo={loadingEvInfo}
         useCurrentLocation={useCurrentLocation}
         setUseCurrentLocation={setUseCurrentLocation}
         suggestions={suggestions}
@@ -391,6 +431,7 @@ const BestRoute = () => {
         onAddWaypoint={addWaypoint}
         onGetCurrentLocation={getCurrentLocation}
         onFindParking={handleFindParking}
+        onFindEvStations={handleFindEvStations}
         onSuggestionSearch={getSuggestions}
         onSuggestionSelect={handleSuggestionSelect}
         clearSuggestions={clearSuggestions}
@@ -429,6 +470,12 @@ const BestRoute = () => {
             getParkingIcon={getParkingIcon}
             formatDistance={formatDistance}
             getPriceLevelText={getPriceLevelText}
+            evStations={evStations}
+            showEvInfo={showEvInfo}
+            selectedEvStation={selectedEvStation}
+            setSelectedEvStation={setSelectedEvStation}
+            getEvIcon={getEvIcon}
+            formatEvDistance={evFormatDistance}
             mapRef={mapRef}
             isGoogleLoaded={isGoogleLoaded}
           />

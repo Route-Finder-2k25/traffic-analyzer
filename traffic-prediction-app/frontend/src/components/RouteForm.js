@@ -13,8 +13,11 @@ const RouteForm = ({
   setSelectedMode,
   parkingRadius,
   setParkingRadius,
+  evRadius,
+  setEvRadius,
   loading,
   loadingParkingInfo,
+  loadingEvInfo,
   useCurrentLocation,
   setUseCurrentLocation,
   suggestions,
@@ -25,6 +28,7 @@ const RouteForm = ({
   onAddWaypoint,
   onGetCurrentLocation,
   onFindParking,
+  onFindEvStations,
   onSuggestionSearch,
   onSuggestionSelect,
   clearSuggestions
@@ -275,6 +279,27 @@ const RouteForm = ({
                   <div className="flex items-center justify-center space-x-2">
                     <span>🅿️</span>
                     <span>Parking</span>
+                  </div>
+                )}
+              </button>
+            </div>
+
+            <div className="lg:col-span-1">
+              <button
+                type="button"
+                onClick={onFindEvStations}
+                disabled={(!!!selectedDestination && !!!waypoints?.length) || loadingEvInfo}
+                className="w-full bg-gradient-to-r from-emerald-500 to-green-600 text-white px-4 py-3 rounded-lg font-semibold shadow-lg hover:from-emerald-600 hover:to-green-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              >
+                {loadingEvInfo ? (
+                  <div className="flex items-center justify-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    <span>Finding...</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center space-x-2">
+                    <span>⚡</span>
+                    <span>EV Stations</span>
                   </div>
                 )}
               </button>

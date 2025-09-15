@@ -107,6 +107,6 @@ def predict_traffic(area, road):
 
     return predicted_volume
 
-predicted = predict_traffic("Hebbal", "Hebbal Flyover")
+predicted = predict_traffic("Jayanagar", "Jayanagar 4th Block")
 if predicted is not None:
     print(f"Predicted Traffic Volume: {predicted:.0f} vehicles")

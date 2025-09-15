@@ -23,6 +23,12 @@ const MapContainer = ({
   getParkingIcon,
   formatDistance,
   getPriceLevelText,
+  evStations,
+  showEvInfo,
+  selectedEvStation,
+  setSelectedEvStation,
+  getEvIcon,
+  formatEvDistance,
   mapRef,
   isGoogleLoaded
 }) => {
@@ -99,6 +105,16 @@ const MapContainer = ({
         />
       ))}
 
+      {/* EV Charging Station Markers */}
+      {showEvInfo && evStations && evStations.map((st) => (
+        <Marker
+          key={st.id}
+          position={st.location}
+          icon={isGoogleLoaded && window.google?.maps ? getEvIcon() : undefined}
+          onClick={() => setSelectedEvStation(st)}
+        />
+      ))}
+
       {/* Current Position Marker */}
       {currentPosition && arrowIcon && (
         <Marker
@@ -134,6 +150,34 @@ const MapContainer = ({
             {selectedParkingSpot.isOpen !== null && (
               <p className={`text-sm font-medium ${selectedParkingSpot.isOpen ? 'text-green-600' : 'text-red-600'}`}>
                 {selectedParkingSpot.isOpen ? 'Open Now' : 'Closed Now'}
+              </p>
+            )}
+          </div>
+        </InfoWindow>
+      )}
+
+      {/* Info Window for Selected EV Station */}
+      {selectedEvStation && (
+        <InfoWindow
+          position={selectedEvStation.location}
+          onCloseClick={() => setSelectedEvStation(null)}
+        >
+          <div className="max-w-xs">
+            <h3 className="font-semibold text-lg mb-2">{selectedEvStation.name}</h3>
+            <p className="text-sm text-gray-600 mb-2">{selectedEvStation.address}</p>
+            {typeof selectedEvStation.distanceToRoute === 'number' && (
+              <p className="text-sm mb-1">
+                <strong>Offset:</strong> {formatEvDistance(selectedEvStation.distanceToRoute)} from route
+              </p>
+            )}
+            {selectedEvStation.rating > 0 && (
+              <p className="text-sm mb-1">
+                <strong>Rating:</strong> ⭐ {selectedEvStation.rating.toFixed(1)} ({selectedEvStation.totalRatings} reviews)
+              </p>
+            )}
+            {selectedEvStation.isOpen !== null && (
+              <p className={`text-sm font-medium ${selectedEvStation.isOpen ? 'text-green-600' : 'text-red-600'}`}>
+                {selectedEvStation.isOpen ? 'Open Now' : 'Closed Now'}
               </p>
             )}
           </div>
