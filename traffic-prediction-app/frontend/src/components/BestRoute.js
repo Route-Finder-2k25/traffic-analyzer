@@ -33,7 +33,7 @@ const center = { lat: 20.5937, lng: 78.9629 };
 
 const travelModes = [
   { id: 'DRIVING', icon: '🚗', label: 'Drive' },
-  { id: 'TRANSIT', icon: '🚌', label: 'Bus' },
+  { id: 'TRANSIT', icon: '🚌', label: 'Bus/Train' },
   { id: 'WALKING', icon: '🚶', label: 'Walk' },
   { id: 'BICYCLING', icon: '🚲', label: 'Bike' }
 ];
