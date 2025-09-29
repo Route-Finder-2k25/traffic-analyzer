@@ -1,4 +1,5 @@
 import React from 'react';
+import TransitCards from './TransitCards';
 
 const RouteResults = ({
   directions,
@@ -8,6 +9,9 @@ const RouteResults = ({
   isTracking,
   selectedRoute,
   locationPermission,
+  selectedMode,
+  selectedSource,
+  selectedDestination,
   onStartNavigation,
   onStopNavigation,
   onRequestLocationPermission
@@ -22,6 +26,23 @@ const RouteResults = ({
   };
 
   if (!directions.length) return null;
+
+  // If travel mode is TRANSIT, show the specialized TransitCards component
+  if (selectedMode === 'TRANSIT') {
+    return (
+      <TransitCards
+        directions={directions}
+        selectedSource={selectedSource}
+        selectedDestination={selectedDestination}
+        onStartNavigation={onStartNavigation}
+        onStopNavigation={onStopNavigation}
+        isTracking={isTracking}
+        selectedRoute={selectedRoute}
+        locationPermission={locationPermission}
+        onRequestLocationPermission={onRequestLocationPermission}
+      />
+    );
+  }
 
   return (
     <div className="mt-6 space-y-4">

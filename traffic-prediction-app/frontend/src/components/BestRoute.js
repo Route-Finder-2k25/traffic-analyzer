@@ -518,6 +518,9 @@ const BestRoute = () => {
         isTracking={isTracking}
         selectedRoute={selectedRoute}
         locationPermission={locationPermission}
+        selectedMode={selectedMode}
+        selectedSource={selectedSource}
+        selectedDestination={selectedDestination}
         onStartNavigation={handleStartNavigation}
         onStopNavigation={handleStopNavigation}
         onRequestLocationPermission={requestLocationPermission}
