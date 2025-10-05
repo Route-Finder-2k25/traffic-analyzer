@@ -4,6 +4,7 @@ import { GOOGLE_MAPS_API_KEY } from '../config';
 import axios from 'axios';
 import { WEATHER_API_KEY } from '../config';
 import './BestRoute.css';
+import { decodePolyline } from '../utils/maps';
 
 // Import components
 import RouteForm from './RouteForm';
@@ -14,12 +15,14 @@ import WeatherCard from './WeatherCard';
 import NavigationOverlay from './NavigationOverlay';
 import LocationPrompt from './LocationPrompt';
 import RecenterButton from './RecenterButton';
+import TransitResultsCard from './TransitResultsCard';
 
 // Import hooks
 import useLocationTracking from '../hooks/useLocationTracking';
 import useParkingSpots from '../hooks/useParkingSpots';
 import useEvStations from '../hooks/useEvStations';
 import useGoogleMapsServices from '../hooks/useGoogleMapsServices';
+import useAccidentZones from '../hooks/useAccidentZones';
 
 // Define constant libraries outside component to avoid reload issues in LoadScript
 const LIBRARIES = ['places', 'geometry'];
@@ -53,6 +56,43 @@ const BestRoute = () => {
   const [weatherInfo, setWeatherInfo] = useState(null);
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [useCurrentLocation, setUseCurrentLocation] = useState(false);
+  const [shouldRequestDirections, setShouldRequestDirections] = useState(false);
+  const [transitData, setTransitData] = useState(null);
+  const [transitPolylines, setTransitPolylines] = useState([]);
+  const [loadingTransit, setLoadingTransit] = useState(false);
+  const [transitError, setTransitError] = useState('');
+
+  const geocodeToLatLng = async (address) => {
+    return new Promise((resolve, reject) => {
+      if (!window.google?.maps?.Geocoder) return reject(new Error('Geocoder not ready'));
+      const geocoder = new window.google.maps.Geocoder();
+      const geocodeRequest = { address, region: 'in' };
+      console.log('[Transit][Geocode][Request]', geocodeRequest);
+      geocoder.geocode(geocodeRequest, (results, status) => {
+        console.log('[Transit][Geocode][Response]', { status, results });
+        if (status === 'OK' && results && results[0]) {
+          const loc = results[0].geometry.location;
+          resolve({ lat: loc.lat(), lng: loc.lng() });
+        } else {
+          reject(new Error(`Geocode failed: ${status}`));
+        }
+      });
+    });
+  };
+  // Refs and readiness (must be defined before hooks that depend on them)
+  const mapRef = useRef(null);
+  const [mapsReady, setMapsReady] = useState(false);
+
+  // Accident zones hook
+  const {
+    accidentZones,
+    showAccidentInfo,
+    setShowAccidentInfo,
+    loadingAccidents,
+    accidentWarnings,
+    findAccidentZones
+  } = useAccidentZones(mapsReady, mapRef);
+  const [selectedAccidentZone, setSelectedAccidentZone] = useState(null);
 
   // Navigation states
   const [navigating, setNavigating] = useState(false);
@@ -62,7 +102,7 @@ const BestRoute = () => {
   const [estimatedTime, setEstimatedTime] = useState('');
   const [followMode, setFollowMode] = useState(false);
 
-  const mapRef = useRef(null);
+  // mapRef moved above to satisfy hook dependency order
 
   // Hooks
   const {
@@ -200,6 +240,15 @@ const BestRoute = () => {
       setRouteLabels(routesInfo);
       setTrafficInfo(routesInfo);
       setError("");
+      // Transit is fetched on-demand via button
+      // Try to refresh accident zones for the primary route when available
+      try {
+        if (result.routes && result.routes[0]) {
+          await findAccidentZones(result.routes[0]);
+        }
+      } catch (e) {
+        console.error('Accident zone refresh error:', e);
+      }
     } else {
       let errorMessage = "Could not find any routes between these locations";
       switch (status) {
@@ -229,9 +278,131 @@ const BestRoute = () => {
       setError(errorMessage);
       setDirections([]);
       setWeatherInfo(null);
+      setTransitData(null);
+      setTransitPolylines([]);
     }
     setLoading(false);
-  }, []);
+    setShouldRequestDirections(false);
+  }, [selectedSource, selectedDestination]);
+
+  const fetchTransit = async () => {
+    if (!selectedSource || !selectedDestination) return;
+    setLoadingTransit(true);
+    setTransitData(null);
+    setTransitPolylines([]);
+    setTransitError('');
+    try {
+      if (!window.google?.maps?.DirectionsService) throw new Error('Google Maps not ready');
+      // Resolve to coordinates to avoid ambiguous text like 'beng'
+      const [origLatLng, destLatLng] = await Promise.all([
+        geocodeToLatLng(selectedSource),
+        geocodeToLatLng(selectedDestination)
+      ]);
+      const svc = new window.google.maps.DirectionsService();
+      const req = {
+        origin: origLatLng,
+        destination: destLatLng,
+        travelMode: 'TRANSIT',
+        transitOptions: {
+          modes: ['BUS', 'SUBWAY', 'TRAIN', 'TRAM', 'RAIL'],
+          departureTime: new Date()
+        },
+        provideRouteAlternatives: true,
+        region: 'IN'
+      };
+      console.log('[Transit][Directions][Request]', req);
+      const td = await new Promise((resolve, reject) => {
+        svc.route(req, (response, s) => {
+          console.log('[Transit][Directions][Response]', { status: s, response });
+          if (s === 'OK') resolve(response);
+          else reject(s);
+        });
+      });
+
+      // Normalize DirectionsResult into a lightweight POJO for rendering
+      const normRoutes = (td?.routes || []).map(r => {
+        const leg = (r.legs && r.legs[0]) || null;
+        const steps = (leg?.steps || []).map(st => {
+          const t = st.transit || st.transit_details || {};
+          const line = t.line || {};
+          const vehicle = line.vehicle || {};
+          const depStop = t.departureStop || t.departure_stop || {};
+          const arrStop = t.arrivalStop || t.arrival_stop || {};
+          const depTime = t.departureTime || t.departure_time || {};
+          const arrTime = t.arrivalTime || t.arrival_time || {};
+          return {
+            travel_mode: st.travel_mode,
+            html_instructions: st.html_instructions,
+            polyline: { points: st.polyline?.points },
+            transit_details: t && (t.line || t.departureStop || t.departure_stop) ? {
+              line: {
+                name: line.name,
+                short_name: line.short_name || line.shortName,
+                vehicle: { type: vehicle.type }
+              },
+              departure_stop: { name: depStop.name },
+              arrival_stop: { name: arrStop.name },
+              departure_time: { text: depTime.text },
+              arrival_time: { text: arrTime.text }
+            } : null
+          };
+        });
+        return {
+          legs: [{
+            distance: { text: leg?.distance?.text },
+            duration: { text: leg?.duration?.text },
+            departure_time: leg?.departure_time ? { text: leg.departure_time.text } : null,
+            arrival_time: leg?.arrival_time ? { text: leg.arrival_time.text } : null,
+            steps
+          }]
+        };
+      });
+
+      const transitUi = { routes: normRoutes };
+      setTransitData(transitUi);
+
+      const paths = [];
+      const tdRoute = transitUi?.routes?.[0];
+      const tdLeg = tdRoute?.legs?.[0];
+      const tdSteps = tdLeg?.steps || [];
+      tdSteps.forEach(step => {
+        const pts = step?.polyline?.points;
+        if (pts) paths.push(decodePolyline(pts));
+      });
+      setTransitPolylines(paths);
+    } catch (e) {
+      console.error('Transit fetch error:', e);
+      setTransitData(null);
+      setTransitPolylines([]);
+      const message = String(e || '');
+      if (message.includes('NOT_FOUND')) {
+        setTransitError('No transit route found for these locations/time. Try more specific addresses.');
+      } else if (message.includes('MAX_ROUTE_LENGTH_EXCEEDED')) {
+        setTransitError('Transit route too long for a single request. Try closer locations or a shorter segment.');
+      } else if (message === 'Google Maps not ready') {
+        setTransitError('Google Maps is still loading. Please try again in a moment.');
+      } else {
+        setTransitError('Failed to load transit directions. Please try again.');
+      }
+    } finally {
+      setLoadingTransit(false);
+    }
+  };
+
+  // Wrapper to call hook with a selected route
+  const handleFindAccidentZones = async () => {
+    const route = selectedRoute || directions[0] || null;
+    if (!route) {
+      setError("Please compute a route first");
+      return;
+    }
+    try {
+      await findAccidentZones(route);
+    } catch (err) {
+      console.error('Error finding accident zones:', err);
+      setError('Failed to find accident zones. Please try again.');
+    }
+  };
 
   // Form and navigation handlers
   const handleSubmit = async (e) => {
@@ -242,9 +413,13 @@ const BestRoute = () => {
     }
     setLoading(true);
     setDirections([]);
+    setTransitData(null);
+    setTransitPolylines([]);
+    setLoadingTransit(false);
     setShowParkingInfo(false);
     // Clear any existing error
     setError("");
+    setShouldRequestDirections(true);
   };
 
   const addWaypoint = (location) => {
@@ -421,6 +596,7 @@ const BestRoute = () => {
         loading={loading}
         loadingParkingInfo={loadingParkingInfo}
         loadingEvInfo={loadingEvInfo}
+        loadingAccidents={loadingAccidents}
         useCurrentLocation={useCurrentLocation}
         setUseCurrentLocation={setUseCurrentLocation}
         suggestions={suggestions}
@@ -432,9 +608,12 @@ const BestRoute = () => {
         onGetCurrentLocation={getCurrentLocation}
         onFindParking={handleFindParking}
         onFindEvStations={handleFindEvStations}
+        onFindAccidents={handleFindAccidentZones}
         onSuggestionSearch={getSuggestions}
         onSuggestionSelect={handleSuggestionSelect}
         clearSuggestions={clearSuggestions}
+        onFetchTransit={fetchTransit}
+        loadingTransit={loadingTransit}
       />
 
       {error && (
@@ -447,6 +626,7 @@ const BestRoute = () => {
         <LoadScript
           googleMapsApiKey={GOOGLE_MAPS_API_KEY}
           libraries={LIBRARIES}
+          onLoad={() => setMapsReady(true)}
         >
           <MapContainer
             mapContainerStyle={mapContainerStyle}
@@ -463,6 +643,8 @@ const BestRoute = () => {
             selectedMode={selectedMode}
             waypoints={waypoints}
             directionsCallback={directionsCallback}
+            shouldRequestDirections={shouldRequestDirections}
+            transitPolylines={transitPolylines}
             parkingSpots={parkingSpots}
             showParkingInfo={showParkingInfo}
             selectedParkingSpot={selectedParkingSpot}
@@ -476,6 +658,11 @@ const BestRoute = () => {
             setSelectedEvStation={setSelectedEvStation}
             getEvIcon={getEvIcon}
             formatEvDistance={evFormatDistance}
+            accidentZones={accidentZones}
+            showAccidentInfo={showAccidentInfo}
+            setShowAccidentInfo={setShowAccidentInfo}
+            selectedAccidentZone={selectedAccidentZone}
+            setSelectedAccidentZone={setSelectedAccidentZone}
             mapRef={mapRef}
             isGoogleLoaded={isGoogleLoaded}
           />
@@ -521,7 +708,31 @@ const BestRoute = () => {
         onStartNavigation={handleStartNavigation}
         onStopNavigation={handleStopNavigation}
         onRequestLocationPermission={requestLocationPermission}
+        transitData={transitData}
+        onFetchTransit={fetchTransit}
+        loadingTransit={loadingTransit}
+        transitError={transitError}
       />
+
+      {/* Enhanced Transit Results Display */}
+      <TransitResultsCard
+        transitData={transitData}
+        loadingTransit={loadingTransit}
+        transitError={transitError}
+        onFetchTransit={fetchTransit}
+      />
+
+      {/* Accident warnings banner */}
+      {showAccidentInfo && accidentWarnings.length > 0 && (
+        <div className="mt-4 p-4 rounded-lg border border-yellow-300 bg-yellow-50 text-yellow-800">
+          <div className="font-semibold mb-1">⚠️ Accident zones on your route:</div>
+          <ul className="list-disc list-inside text-sm">
+            {accidentWarnings.map((w, i) => (
+              <li key={i}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {weatherInfo && <WeatherCard weatherInfo={weatherInfo} />}
 

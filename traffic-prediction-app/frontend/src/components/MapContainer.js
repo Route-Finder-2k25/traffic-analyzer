@@ -1,5 +1,5 @@
 import React from 'react';
-import { GoogleMap, DirectionsService, DirectionsRenderer, Marker, InfoWindow } from '@react-google-maps/api';
+import { GoogleMap, DirectionsService, DirectionsRenderer, Marker, InfoWindow, Polyline } from '@react-google-maps/api';
 
 const MapContainer = ({
   mapContainerStyle,
@@ -16,6 +16,8 @@ const MapContainer = ({
   selectedMode,
   waypoints,
   directionsCallback,
+  shouldRequestDirections,
+  transitPolylines,
   parkingSpots,
   showParkingInfo,
   selectedParkingSpot,
@@ -29,6 +31,11 @@ const MapContainer = ({
   setSelectedEvStation,
   getEvIcon,
   formatEvDistance,
+  accidentZones,
+  showAccidentInfo,
+  setShowAccidentInfo,
+  selectedAccidentZone,
+  setSelectedAccidentZone,
   mapRef,
   isGoogleLoaded
 }) => {
@@ -48,8 +55,34 @@ const MapContainer = ({
       }}
       onLoad={(map) => (mapRef.current = map)}
     >
+      {/* Floating Legend */}
+      <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 2 }}>
+        <div className="rounded-lg bg-white/95 backdrop-blur border border-gray-200 shadow px-3 py-2 text-xs text-gray-700">
+          <div className="font-semibold text-gray-900 mb-1">Legend</div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="inline-block h-2 w-2 rounded-full bg-indigo-600"></span>
+            <span>Route 1</span>
+          </div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-600"></span>
+            <span>Route 2</span>
+          </div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="inline-block h-2 w-2 rounded-full bg-rose-600"></span>
+            <span>Route 3</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-2 w-2 rounded-full bg-yellow-500"></span>
+            <span>Accident (near)</span>
+          </div>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="inline-block h-2 w-2 rounded-full bg-red-600"></span>
+            <span>Accident (on route)</span>
+          </div>
+        </div>
+      </div>
       {/* Directions Service */}
-      {selectedSource && selectedDestination && !directions.length && (
+      {selectedSource && selectedDestination && shouldRequestDirections && !directions.length && (
         <DirectionsService
           options={{
             destination: selectedDestination,
@@ -95,6 +128,20 @@ const MapContainer = ({
         </React.Fragment>
       ))}
 
+      {/* Transit Polylines */}
+      {transitPolylines && transitPolylines.map((path, idx) => (
+        <Polyline
+          key={`transit-${idx}`}
+          path={path}
+          options={{
+            strokeColor: '#2563EB',
+            strokeOpacity: 0.8,
+            strokeWeight: 4,
+            zIndex: 1,
+          }}
+        />
+      ))}
+
       {/* Parking Spot Markers */}
       {showParkingInfo && parkingSpots.map((spot) => (
         <Marker
@@ -113,6 +160,46 @@ const MapContainer = ({
           icon={isGoogleLoaded && window.google?.maps ? getEvIcon() : undefined}
           onClick={() => setSelectedEvStation(st)}
         />
+      ))}
+
+      {/* Accident Zone Markers */}
+      {showAccidentInfo && accidentZones && accidentZones.map((az) => (
+        <React.Fragment key={az.id}>
+          <Marker
+            position={az.location}
+            icon={isGoogleLoaded && window.google?.maps ? {
+              path: window.google.maps.SymbolPath.CIRCLE,
+              scale: 8,
+              fillColor: az.onRoute ? '#DC2626' : '#F59E0B',
+              fillOpacity: 0.95,
+              strokeColor: az.onRoute ? '#7F1D1D' : '#B45309',
+              strokeWeight: 2
+            } : undefined}
+            title={`Accident Zone: ${az.name}`}
+            onClick={() => setSelectedAccidentZone(az)}
+          />
+          {selectedAccidentZone && selectedAccidentZone.id === az.id && (
+            <InfoWindow
+              position={az.location}
+              onCloseClick={() => setSelectedAccidentZone(null)}
+            >
+              <div className="max-w-xs">
+                <h3 className="font-semibold text-lg mb-1">{az.name}</h3>
+                {az.address && (
+                  <p className="text-sm text-gray-600 mb-1">{az.address}</p>
+                )}
+                {typeof az.rating === 'number' && az.rating > 0 && (
+                  <p className="text-sm mb-1">
+                    <strong>Rating:</strong> ⭐ {az.rating.toFixed(1)} ({az.totalRatings} reviews)
+                  </p>
+                )}
+                <p className={`text-sm font-medium ${az.onRoute ? 'text-red-700' : 'text-yellow-700'}`}>
+                  {az.onRoute ? 'On your route' : 'Near your route'}
+                </p>
+              </div>
+            </InfoWindow>
+          )}
+        </React.Fragment>
       ))}
 
       {/* Current Position Marker */}
