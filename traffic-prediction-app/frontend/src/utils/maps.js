@@ -13,7 +13,7 @@ export async function getTransitDirections(origin, destination) {
 
   const url = `https://maps.googleapis.com/maps/api/directions/json?${params.toString()}`;
   const response = await fetch(url);
-  console.log(response);
+  
   if (!response.ok) {
     throw new Error(`Transit directions request failed: ${response.status}`);
   }

@@ -11,10 +11,6 @@ const RouteResults = ({
   onStartNavigation,
   onStopNavigation,
   onRequestLocationPermission,
-  transitData,
-  onFetchTransit,
-  loadingTransit,
-  transitError
 }) => {
   const getTrafficColor = (level) => {
     switch (level) {
@@ -25,79 +21,10 @@ const RouteResults = ({
     }
   };
 
-  const transitRoute = transitData?.routes?.[0];
-  const transitLeg = transitRoute?.legs?.[0];
-  const transitSteps = transitLeg?.steps || [];
-
-  if (!directions.length && !transitRoute) return null;
+  if (!directions.length) return null;
 
   return (
     <div className="mt-6 space-y-4">
-      {/* Transit Summary */}
-      {/* The transit trigger moved to the RouteForm */}
-
-      {transitError && (
-        <div className="rounded-lg border border-red-200 bg-red-50 text-red-700 p-3">{transitError}</div>
-      )}
-
-      {transitRoute && (
-        <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-blue-800">Public Transit (Bus/Train)</h3>
-            <div className="text-sm text-blue-800">
-              <span className="mr-4">📏 {transitLeg?.distance?.text}</span>
-              <span className="mr-4">⏱️ {transitLeg?.duration?.text}</span>
-              {transitLeg?.departure_time?.text && (
-                <span className="mr-2">🕘 {transitLeg.departure_time.text}</span>
-              )}
-              {transitLeg?.arrival_time?.text && (
-                <span>🏁 {transitLeg.arrival_time.text}</span>
-              )}
-            </div>
-          </div>
-          {/* Transit Steps */}
-          <div className="mt-3 space-y-2">
-            {transitSteps.map((step, i) => {
-              const isTransit = step.travel_mode === 'TRANSIT';
-              const td = step.transit_details;
-              return (
-                <div key={i} className={`p-3 rounded-lg border ${isTransit ? 'border-blue-300 bg-white' : 'border-gray-200 bg-white'}`}>
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="text-gray-800">
-                      {isTransit ? (
-                        <>
-                          <span className="font-medium">
-                            {td?.line?.short_name || td?.line?.name || 'Transit'}
-                          </span>
-                          <span className="ml-2 text-gray-600">
-                            ({td?.vehicle?.type || 'Transit'})
-                          </span>
-                          <span className="ml-2">→ {td?.arrival_stop?.name || ''}</span>
-                        </>
-                      ) : (
-                        <span>{step.html_instructions?.replace(/<[^>]*>?/gm, '')}</span>
-                      )}
-                    </div>
-                    <div className="text-gray-600">
-                      {isTransit && (
-                        <span>
-                          {td?.departure_time?.text ? `Dep ${td.departure_time.text}` : ''}
-                          {td?.arrival_time?.text ? ` · Arr ${td.arrival_time.text}` : ''}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {isTransit && (
-                    <div className="mt-1 text-xs text-gray-600">
-                      From {td?.departure_stop?.name || '—'} to {td?.arrival_stop?.name || '—'}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
       {directions.map((route, index) => (
         <div
           key={index}

@@ -61,6 +61,7 @@ const BestRoute = () => {
   const [transitPolylines, setTransitPolylines] = useState([]);
   const [loadingTransit, setLoadingTransit] = useState(false);
   const [transitError, setTransitError] = useState('');
+  const [selectedTransitDate, setSelectedTransitDate] = useState(new Date());
 
   const geocodeToLatLng = async (address) => {
     return new Promise((resolve, reject) => {
@@ -298,6 +299,10 @@ const BestRoute = () => {
         geocodeToLatLng(selectedSource),
         geocodeToLatLng(selectedDestination)
       ]);
+      // Build departure time based on selected transit date, preserving current time of day
+      const departureDate = new Date(selectedTransitDate);
+      const now = new Date();
+      departureDate.setHours(now.getHours(), now.getMinutes(), 0, 0);
       const svc = new window.google.maps.DirectionsService();
       const req = {
         origin: origLatLng,
@@ -305,7 +310,7 @@ const BestRoute = () => {
         travelMode: 'TRANSIT',
         transitOptions: {
           modes: ['BUS', 'SUBWAY', 'TRAIN', 'TRAM', 'RAIL'],
-          departureTime: new Date()
+          departureTime: departureDate
         },
         provideRouteAlternatives: true,
         region: 'IN'
@@ -720,6 +725,10 @@ const BestRoute = () => {
         loadingTransit={loadingTransit}
         transitError={transitError}
         onFetchTransit={fetchTransit}
+        selectedTransitDate={selectedTransitDate}
+        setSelectedTransitDate={setSelectedTransitDate}
+        selectedSource={selectedSource}
+        selectedDestination={selectedDestination}
       />
 
       {/* Accident warnings banner */}
