@@ -88,6 +88,7 @@ const MapContainer = ({
             destination: selectedDestination,
             origin: selectedSource,
             travelMode: selectedMode,
+            transitOptions: selectedMode === 'TRANSIT' ? { modes: ['BUS', 'TRAIN'] } : undefined,
             provideRouteAlternatives: true,
             optimizeWaypoints: true,
             waypoints: waypoints,
@@ -111,7 +112,8 @@ const MapContainer = ({
                   request: {
                     destination: selectedDestination,
                     origin: selectedSource,
-                    travelMode: selectedMode
+                    travelMode: selectedMode,
+                    transitOptions: selectedMode === 'TRANSIT' ? { modes: ['BUS', 'TRAIN'] } : undefined
                   }
                 },
                 routeIndex: 0,
