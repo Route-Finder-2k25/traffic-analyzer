@@ -18,6 +18,7 @@ const RouteForm = ({
   loading,
   loadingParkingInfo,
   loadingEvInfo,
+  loadingAccidents,
   useCurrentLocation,
   setUseCurrentLocation,
   suggestions,
@@ -29,9 +30,12 @@ const RouteForm = ({
   onGetCurrentLocation,
   onFindParking,
   onFindEvStations,
+  onFindAccidents,
   onSuggestionSearch,
   onSuggestionSelect,
-  clearSuggestions
+  clearSuggestions,
+  onFetchTransit,
+  loadingTransit
 }) => {
   const [activeSuggestionField, setActiveSuggestionField] = useState(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -76,6 +80,13 @@ const RouteForm = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // When user opts to use current location, fetch immediately
+  useEffect(() => {
+    if (useCurrentLocation) {
+      onGetCurrentLocation();
+    }
+  }, [useCurrentLocation, onGetCurrentLocation]);
+
   const removeWaypoint = (index) => {
     const newWaypoints = waypoints.filter((_, i) => i !== index);
     setWaypoints(newWaypoints);
@@ -92,6 +103,7 @@ const RouteForm = ({
               📍 From
             </label>
             <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">📍</span>
               <input
                 type="text"
                 value={selectedSource}
@@ -103,8 +115,8 @@ const RouteForm = ({
                   }
                 }}
                 placeholder="Enter starting location"
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
-                disabled={loading}
+                className={`w-full pl-9 pr-11 py-3 border-2 rounded-lg focus:ring-2 transition-all duration-200 ${useCurrentLocation ? 'bg-green-50 border-green-300 focus:ring-green-500 focus:border-green-500' : 'bg-gray-50 border-gray-300 focus:ring-blue-500 focus:border-blue-500'} hover:bg-white`}
+                disabled={loading || useCurrentLocation}
               />
               <button
                 type="button"
@@ -139,20 +151,23 @@ const RouteForm = ({
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               🎯 To
             </label>
-            <input
-              type="text"
-              value={selectedDestination}
-              onChange={(e) => handleInputChange(e.target.value, 'destination', setSelectedDestination)}
-              onFocus={() => {
-                if (selectedDestination.length > 2) {
-                  setActiveSuggestionField('destination');
-                  setShowSuggestions(true);
-                }
-              }}
-              placeholder="Enter destination"
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
-              disabled={loading}
-            />
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🎯</span>
+              <input
+                type="text"
+                value={selectedDestination}
+                onChange={(e) => handleInputChange(e.target.value, 'destination', setSelectedDestination)}
+                onFocus={() => {
+                  if (selectedDestination.length > 2) {
+                    setActiveSuggestionField('destination');
+                    setShowSuggestions(true);
+                  }
+                }}
+                placeholder="Enter destination"
+                className="w-full pl-9 pr-3 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                disabled={loading}
+              />
+            </div>
             
             {/* Destination Suggestions */}
             {showSuggestions && activeSuggestionField === 'destination' && suggestions.length > 0 && (
@@ -172,23 +187,29 @@ const RouteForm = ({
             )}
           </div>
 
-          {/* Travel Mode Selection */}
+          {/* Travel Mode Selection - Segmented Buttons */}
           <div className="lg:col-span-2">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              🚗 Mode
-            </label>
-            <select
-              value={selectedMode}
-              onChange={(e) => setSelectedMode(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
-              disabled={loading}
-            >
-              {travelModes.map((mode) => (
-                <option key={mode.id} value={mode.id}>
-                  {mode.icon} {mode.label}
-                </option>
-              ))}
-            </select>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">🚗 Mode</label>
+            <div className="grid grid-cols-4 gap-2">
+              {travelModes.map((mode) => {
+                const isActive = selectedMode === mode.id;
+                return (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    onClick={() => setSelectedMode(mode.id)}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium border transition ${
+                      isActive
+                        ? 'bg-blue-600 text-white border-blue-600 shadow'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className="mr-1">{mode.icon}</span>
+                    {mode.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Search Button */}
@@ -211,6 +232,28 @@ const RouteForm = ({
               )}
             </button>
           </div>
+
+          {/* Show Transit Button */}
+          <div className="lg:col-span-2">
+            <button
+              type="button"
+              onClick={onFetchTransit}
+              disabled={loadingTransit || !selectedSource || !selectedDestination}
+              className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+            >
+              {loadingTransit ? (
+                <div className="flex items-center justify-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                  <span>Loading Transit…</span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center space-x-2">
+                  <span>🚌</span>
+                  <span>Show Transit</span>
+                </div>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Waypoints Section */}
@@ -220,19 +263,28 @@ const RouteForm = ({
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 ➕ Add Stop (Optional)
               </label>
-              <input
-                type="text"
-                value={waypointInput}
-                onChange={(e) => handleInputChange(e.target.value, 'waypoint', setWaypointInput)}
-                onFocus={() => {
-                  if (waypointInput.length > 2) {
-                    setActiveSuggestionField('waypoint');
-                    setShowSuggestions(true);
-                  }
-                }}
-                placeholder="Add intermediate stop"
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-gray-50 hover:bg-white"
-              />
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">➕</span>
+                <input
+                  type="text"
+                  value={waypointInput}
+                  onChange={(e) => handleInputChange(e.target.value, 'waypoint', setWaypointInput)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && waypointInput.trim()) {
+                      e.preventDefault();
+                      onAddWaypoint(waypointInput);
+                    }
+                  }}
+                  onFocus={() => {
+                    if (waypointInput.length > 2) {
+                      setActiveSuggestionField('waypoint');
+                      setShowSuggestions(true);
+                    }
+                  }}
+                  placeholder="Add intermediate stop"
+                  className="w-full pl-9 pr-3 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                />
+              </div>
               
               {/* Waypoint Suggestions */}
               {showSuggestions && activeSuggestionField === 'waypoint' && suggestions.length > 0 && (
@@ -300,6 +352,27 @@ const RouteForm = ({
                   <div className="flex items-center justify-center space-x-2">
                     <span>⚡</span>
                     <span>EV Stations</span>
+                  </div>
+                )}
+              </button>
+            </div>
+
+            <div className="lg:col-span-1">
+              <button
+                type="button"
+                onClick={onFindAccidents}
+                disabled={(!!!selectedDestination && !!!waypoints?.length) || loadingAccidents}
+                className="w-full bg-gradient-to-r from-yellow-500 to-amber-600 text-white px-4 py-3 rounded-lg font-semibold shadow-lg hover:from-yellow-600 hover:to-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              >
+                {loadingAccidents ? (
+                  <div className="flex items-center justify-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    <span>Scanning...</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center space-x-2">
+                    <span>⚠️</span>
+                    <span>Accidents</span>
                   </div>
                 )}
               </button>
