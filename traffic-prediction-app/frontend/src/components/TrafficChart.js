@@ -18,6 +18,10 @@ const formatXAxis = (hour) => {
 function TrafficChart() {
   const [selectedSource, setSelectedSource] = useState("");
   const [selectedDestination, setSelectedDestination] = useState("");
+  // store the full place object (prediction) when user picks a suggestion
+  const [selectedSourcePlace, setSelectedSourcePlace] = useState(null);
+  const [selectedDestinationPlace, setSelectedDestinationPlace] = useState(null);
+
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -32,7 +36,7 @@ function TrafficChart() {
 
   useEffect(() => {
     let map = null;
-    
+
     if (mapElement.current) {
       map = ttmaps.map({
         key: TOMTOM_API_KEY,
@@ -113,8 +117,8 @@ function TrafficChart() {
 
           const route = routeRes.data.routes[0];
           const summary = route.summary;
-          
-          const weatherHour = weatherRes.data.list.find(item => 
+
+          const weatherHour = weatherRes.data.list.find(item =>
             new Date(item.dt * 1000).getHours() === i
           );
 
@@ -169,9 +173,17 @@ function TrafficChart() {
     });
   };
 
+  // When user types, we clear the previously selected place so they MUST pick again
   const handleInputChange = (value, field) => {
-    if (field === 'source') setSelectedSource(value);
-    if (field === 'destination') setSelectedDestination(value);
+    setError("");
+    if (field === 'source') {
+      setSelectedSource(value);
+      setSelectedSourcePlace(null); // clear selection, must pick suggestion
+    }
+    if (field === 'destination') {
+      setSelectedDestination(value);
+      setSelectedDestinationPlace(null); // clear selection, must pick suggestion
+    }
     if (value.length > 2) {
       setActiveField(field);
       setShowSuggestions(true);
@@ -182,12 +194,20 @@ function TrafficChart() {
     }
   };
 
+  // When user clicks a suggestion, we set both the visible text and the place object
   const handleSuggestionClick = (prediction) => {
     const description = prediction.description || '';
-    if (activeField === 'source') setSelectedSource(description);
-    if (activeField === 'destination') setSelectedDestination(description);
+    if (activeField === 'source') {
+      setSelectedSource(description);
+      setSelectedSourcePlace(prediction); // mark as a valid selection
+    }
+    if (activeField === 'destination') {
+      setSelectedDestination(description);
+      setSelectedDestinationPlace(prediction); // mark as a valid selection
+    }
     setShowSuggestions(false);
     setActiveField(null);
+    setSuggestions([]);
   };
 
   useEffect(() => {
@@ -206,10 +226,15 @@ function TrafficChart() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedSource || !selectedDestination) {
-      setError("Please enter both source and destination locations");
+    setError("");
+
+    // Validate: user must have selected suggestion objects for both fields
+    if (!selectedSourcePlace || !selectedDestinationPlace) {
+      setError("Source or destination not found");
       return;
     }
+
+    // Use the descriptions (or you could extract parts from the place object)
     await getTrafficData(selectedSource, selectedDestination);
   };
 
@@ -223,7 +248,7 @@ function TrafficChart() {
           </h2>
           <p className="text-gray-600 text-lg"></p>
         </div>
-        
+
         <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY} libraries={["places"]}>
           {/* Form Card */}
           <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 md:p-8 mb-8 shadow-xl border border-white">
@@ -261,6 +286,10 @@ function TrafficChart() {
                     </div>
                   )}
                 </div>
+                {/* Visual hint that selection is required */}
+                {selectedSource && !selectedSourcePlace && (
+                  <p className="text-xs text-yellow-600 mt-2">Type and pick a suggestion — selection required</p>
+                )}
               </div>
 
               {/* Destination Input */}
@@ -296,15 +325,18 @@ function TrafficChart() {
                     </div>
                   )}
                 </div>
+                {selectedDestination && !selectedDestinationPlace && (
+                  <p className="text-xs text-yellow-600 mt-2">Type and pick a suggestion — selection required</p>
+                )}
               </div>
 
               {/* Submit Button */}
-              <button 
+              <button
                 type="submit"
                 disabled={loading || !selectedSource || !selectedDestination}
                 className={`px-8 py-4 rounded-2xl font-semibold text-white transition-all duration-300 transform hover:scale-105 shadow-lg ${
                   loading || !selectedSource || !selectedDestination
-                    ? 'bg-gray-300 cursor-not-allowed opacity-60' 
+                    ? 'bg-gray-300 cursor-not-allowed opacity-60'
                     : 'bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 hover:shadow-xl hover:shadow-purple-300'
                 }`}
               >
@@ -326,7 +358,7 @@ function TrafficChart() {
         {loading && (
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 mb-8 shadow-lg border border-white">
             <div className="relative w-full h-3 bg-gray-200 rounded-full overflow-hidden">
-              <div 
+              <div
                 className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 transition-all duration-300 rounded-full"
                 style={{ width: `${progress}%` }}
               >
@@ -357,7 +389,7 @@ function TrafficChart() {
             </div>
             <div className="bg-gradient-to-br from-blue-50/50 to-purple-50/50 rounded-2xl p-6">
               <ResponsiveContainer width="100%" height={500}>
-                <BarChart 
+                <BarChart
                   data={chartData}
                   margin={{ top: 20, right: 20, left: 0, bottom: 60 }}
                 >
@@ -369,7 +401,7 @@ function TrafficChart() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" opacity={0.5} />
-                  <XAxis 
+                  <XAxis
                     dataKey="hour"
                     tickFormatter={formatXAxis}
                     interval={0}
@@ -378,32 +410,32 @@ function TrafficChart() {
                     height={80}
                     stroke="#64748b"
                     style={{ fontSize: '12px', fontWeight: '500' }}
-                    label={{ 
-                      value: 'Time of Day', 
+                    label={{
+                      value: 'Time of Day',
                       position: 'insideBottom',
                       offset: -10,
                       style: { fill: '#475569', fontSize: '14px', fontWeight: 'bold' }
                     }}
                   />
-                  <YAxis 
+                  <YAxis
                     stroke="#64748b"
                     style={{ fontSize: '12px', fontWeight: '500' }}
-                    label={{ 
-                      value: 'Travel Time (minutes)', 
-                      angle: -90, 
+                    label={{
+                      value: 'Travel Time (minutes)',
+                      angle: -90,
                       position: 'insideLeft',
                       offset: 10,
                       style: { fill: '#475569', fontSize: '14px', fontWeight: 'bold' }
                     }}
                   />
                   <Tooltip content={CustomTooltip} cursor={{ fill: 'rgba(147, 197, 253, 0.2)' }} />
-                  <Legend 
-                    verticalAlign="top" 
+                  <Legend
+                    verticalAlign="top"
                     height={36}
                     wrapperStyle={{ color: '#475569', fontSize: '14px', fontWeight: '600' }}
                   />
-                  <Bar 
-                    dataKey="travel_time" 
+                  <Bar
+                    dataKey="travel_time"
                     name="Travel Time"
                     fill="url(#barGradient)"
                     radius={[8, 8, 0, 0]}
@@ -428,7 +460,7 @@ const CustomTooltip = ({ active, payload }) => {
           <div className="w-3 h-3 rounded-full bg-gradient-to-r from-blue-500 to-purple-500"></div>
           <p className="font-bold text-blue-600 text-lg">{formattedHour}</p>
         </div>
-      
+
         {data.travel_time > 0 ? (
           <div className="space-y-2 text-sm">
             <div className="flex justify-between items-center">
@@ -439,7 +471,6 @@ const CustomTooltip = ({ active, payload }) => {
               <span className="text-gray-600">Traffic Delay:</span>
               <span className="text-purple-600 font-semibold">{data.traffic_delay} mins</span>
             </div>
-            
 
             <div className="pt-2 mt-2 border-t-2 border-gray-200">
               <div className="flex justify-between items-center mb-1">
@@ -454,8 +485,8 @@ const CustomTooltip = ({ active, payload }) => {
                 <span className="text-gray-600">Traffic Level:</span>
                 <span className={`font-semibold ${
                   data.traffic_level === 'Low' ? 'text-green-600' :
-                  data.traffic_level === 'Medium' ? 'text-yellow-600' :
-                  'text-red-600'
+                    data.traffic_level === 'Medium' ? 'text-yellow-600' :
+                      'text-red-600'
                 }`}>{data.traffic_level}</span>
               </div>
             </div>
@@ -478,6 +509,5 @@ const CustomTooltip = ({ active, payload }) => {
   }
   return null;
 };
-
 
 export default TrafficChart;

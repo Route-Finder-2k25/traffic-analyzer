@@ -23,6 +23,7 @@ le_road = LabelEncoder()
 le_weather = LabelEncoder()
 le_construction = LabelEncoder()
 
+# Drop rows with missing categorical fields used for encoding
 if (data['Area Name'].isnull().any() or 
     data['Road/Intersection Name'].isnull().any() or 
     data['Weather Conditions'].isnull().any() or 
@@ -37,6 +38,7 @@ if (data['Area Name'].isnull().any() or
         ]
     )
 
+# Fit encoders
 data['Area Encoded'] = le_area.fit_transform(data['Area Name'])
 data['Road Encoded'] = le_road.fit_transform(data['Road/Intersection Name'])
 data['Weather Encoded'] = le_weather.fit_transform(data['Weather Conditions'])
@@ -55,6 +57,7 @@ feature_cols = [
 ]
 target_col = 'Traffic Volume'
 
+# Drop rows with missing features/target
 data = data.dropna(subset=feature_cols + [target_col])
 
 # ---------------------------
@@ -96,22 +99,18 @@ print(f"MAE: {mae:.2f}")
 print(f"RMSE: {rmse:.2f}")
 
 # ---------------------------
-# FEATURE IMPORTANCE PLOT
+# (Feature importance plot REMOVED on request)
 # ---------------------------
-importances = model.feature_importances_
-indices = np.argsort(importances)[::-1]
-
-plt.figure(figsize=(9, 6))
-plt.bar([feature_cols[i] for i in indices], importances[indices])
-plt.xticks(rotation=90)
-plt.title("Feature Importance - Random Forest")
-plt.tight_layout()
-plt.show()
 
 # ---------------------------
 # PREDICTION FUNCTION
 # ---------------------------
-def predict_traffic(area, road):
+def predict_traffic(area, road, show_plot=True):
+    """
+    Predict traffic volume for the given area and road using the most recent
+    observations for that area/road in the dataset. Returns predicted volume.
+    If show_plot is True, displays a single bar plot of the predicted volume.
+    """
     today = datetime.now()
 
     filtered = data[
@@ -133,6 +132,7 @@ def predict_traffic(area, road):
             [recent['Roadwork and Construction Activity']]
         )[0]
     except ValueError:
+        # Fallbacks if an encoding fails (shouldn't normally happen because we checked filtered)
         weather_encoded = 0
         construction_encoded = 0
 
@@ -157,13 +157,14 @@ def predict_traffic(area, road):
 
     predicted_volume = model.predict(sample_input)[0]
 
-    plt.figure(figsize=(6, 4))
-    plt.bar([f'{area}\n({road})'], [predicted_volume])
-    plt.title("Predicted Traffic Volume for Today")
-    plt.ylabel("Traffic Volume")
-    plt.grid(axis='y', linestyle='--', alpha=0.7)
-    plt.tight_layout()
-    plt.show()
+    if show_plot:
+        plt.figure(figsize=(6, 4))
+        plt.bar([f'{area}\n({road})'], [predicted_volume])
+        plt.title("Predicted Traffic Volume for Today")
+        plt.ylabel("Traffic Volume")
+        plt.grid(axis='y', linestyle='--', alpha=0.7)
+        plt.tight_layout()
+        plt.show()
 
     return predicted_volume
 

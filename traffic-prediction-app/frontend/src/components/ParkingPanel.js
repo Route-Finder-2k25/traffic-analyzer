@@ -89,10 +89,10 @@ const ParkingPanel = ({
               
               <div className="space-y-2 text-sm">
                 {/* Distance */}
-                <div className="flex items-center gap-2">
+                {/* <div className="flex items-center gap-2">
                   <span className="text-gray-500 min-w-[60px]">📍 Distance:</span>
                   <span className="font-medium">{formatDistance(spot.distance)}</span>
-                </div>
+                </div> */}
                 
                 {/* Rating */}
                 {spot.rating > 0 && (

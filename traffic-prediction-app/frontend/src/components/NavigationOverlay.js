@@ -11,7 +11,7 @@ const NavigationOverlay = ({ instruction, distance, time, onClose }) => {
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <div className="text-2xl font-semibold text-gray-900" dangerouslySetInnerHTML={{ __html: instruction }} />
-                  <p className="text-gray-600 mt-1">{distance}</p>
+                  
                 </div>
               </div>
             </div>
